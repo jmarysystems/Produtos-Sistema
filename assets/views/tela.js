@@ -20,8 +20,18 @@ export async function render(raiz, ctx) {
   ]);
   const listas = { categorias, subcategorias, familias, marcas };
 
+  const imagens = await listar('produto_imagens', { ordem: 'ordem' });
+  const porProduto = {};
+  for (const img of imagens) {
+    (porProduto[img.produto_id] = porProduto[img.produto_id] || []).push(img);
+  }
+
   const linhas = produtos.map((p) => `
     <tr data-busca="${esc(JSON.stringify(p).toLowerCase())}">
+      <td class="foto">${porProduto[p.id] && porProduto[p.id].length
+        ? `<img src="${esc(porProduto[p.id][0].url)}" alt="" class="mini"
+             data-zoom="${esc(p.id)}" data-i="0">`
+        : '—'}</td>
       <td class="mono">${esc(p.sku)}</td>
       <td class="mono">${esc(p.ean || '—')}</td>
       <td>${esc(p.descricao)}</td>
@@ -44,9 +54,9 @@ export async function render(raiz, ctx) {
       <label class="campo" style="max-width:340px"><span>Filtrar</span>
         <input type="search" id="filtro" placeholder="SKU, EAN ou descrição"></label>
       <div class="tabela-rolagem"><table id="tabela">
-        <thead><tr><th>SKU</th><th>EAN</th><th>Descrição</th><th>Un.</th>
+        <thead><tr><th>Foto</th><th>SKU</th><th>EAN</th><th>Descrição</th><th>Un.</th>
           <th>Categoria</th><th>Marca</th><th>Ativo</th><th></th></tr></thead>
-        <tbody>${linhas || '<tr><td colspan="8">Nenhum produto cadastrado.</td></tr>'}</tbody>
+        <tbody>${linhas || '<tr><td colspan="9">Nenhum produto cadastrado.</td></tr>'}</tbody>
       </table></div>
     </div>`;
 
@@ -187,10 +197,19 @@ export async function render(raiz, ctx) {
         .select('*').eq('produto_id', produtoId).order('ordem');
       miniaturas.innerHTML = (data || []).map((img) => `
         <span style="position:relative;display:inline-block">
-          <img src="${esc(img.url)}" alt="" style="width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid #cfd6df">
+          <img src="${esc(img.url)}" alt="" class="mini"
+               data-z="${esc(img.url)}"
+               style="width:84px;height:84px;object-fit:cover;border-radius:8px;border:1px solid #cfd6df">
           <button type="button" data-apagar="${esc(img.id)}" data-caminho="${esc(img.caminho)}"
             style="position:absolute;top:-6px;right:-6px;border:none;background:#c62828;color:#fff;border-radius:50%;width:20px;height:20px;cursor:pointer">×</button>
         </span>`).join('');
+
+      for (const im of miniaturas.querySelectorAll('[data-z]')) {
+        im.addEventListener('click', () => {
+          const lista = (data || []).map((x) => ({ url: x.url }));
+          abrirZoom(lista, lista.findIndex((x) => x.url === im.dataset.z));
+        });
+      }
 
       for (const b of miniaturas.querySelectorAll('[data-apagar]')) {
         b.addEventListener('click', () => {
@@ -257,6 +276,12 @@ export async function render(raiz, ctx) {
     });
   }
 
+  for (const img of raiz.querySelectorAll('[data-zoom]')) {
+    img.addEventListener('click', () => {
+      abrirZoom(porProduto[img.dataset.zoom] || [], Number(img.dataset.i) || 0);
+    });
+  }
+
   raiz.querySelector('#novo')?.addEventListener('click', () => abrirFormulario({}));
   for (const b of raiz.querySelectorAll('[data-editar]')) {
     b.addEventListener('click', () => abrirFormulario(produtos.find((p) => p.id === b.dataset.editar) || {}));
@@ -271,4 +296,49 @@ export async function render(raiz, ctx) {
       } catch (erro) { ui.toast(erro.message, 'erro'); }
     });
   }
+}
+
+// ------------------------------------------------------------------ zoom
+function abrirZoom(imagens, indice = 0) {
+  const lista = (imagens || []).filter((i) => i && i.url);
+  if (!lista.length) return;
+
+  let atual = Math.min(Math.max(indice, 0), lista.length - 1);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'zoom-overlay';
+  overlay.innerHTML = `
+    <button type="button" class="zoom-fechar" aria-label="Fechar">&times;</button>
+    ${lista.length > 1 ? '<button type="button" class="zoom-nav zoom-ant" aria-label="Anterior">‹</button>' : ''}
+    <img class="zoom-img" src="${esc(lista[atual].url)}" alt="">
+    ${lista.length > 1 ? '<button type="button" class="zoom-nav zoom-prox" aria-label="Próxima">›</button>' : ''}
+    ${lista.length > 1 ? `<span class="zoom-conta">${atual + 1} / ${lista.length}</span>` : ''}`;
+
+  document.body.appendChild(overlay);
+
+  const img = overlay.querySelector('.zoom-img');
+  const conta = overlay.querySelector('.zoom-conta');
+
+  const mostrar = (i) => {
+    atual = (i + lista.length) % lista.length;
+    img.src = lista[atual].url;
+    if (conta) conta.textContent = `${atual + 1} / ${lista.length}`;
+  };
+
+  const fechar = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', teclado);
+  };
+
+  const teclado = (ev) => {
+    if (ev.key === 'Escape') fechar();
+    if (ev.key === 'ArrowLeft' && lista.length > 1) mostrar(atual - 1);
+    if (ev.key === 'ArrowRight' && lista.length > 1) mostrar(atual + 1);
+  };
+
+  overlay.querySelector('.zoom-fechar').addEventListener('click', fechar);
+  overlay.addEventListener('click', (ev) => { if (ev.target === overlay) fechar(); });
+  overlay.querySelector('.zoom-ant')?.addEventListener('click', () => mostrar(atual - 1));
+  overlay.querySelector('.zoom-prox')?.addEventListener('click', () => mostrar(atual + 1));
+  document.addEventListener('keydown', teclado);
 }
