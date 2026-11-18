@@ -38,6 +38,14 @@ const CONFIG = {
       }
     },
     {
+      "campo": "marca_id",
+      "rotulo": "Marca",
+      "de": {
+        "tabela": "arm_marcas",
+        "rotulo": "descricao"
+      }
+    },
+    {
       "campo": "ativo",
       "rotulo": "Ativo"
     }
@@ -93,6 +101,15 @@ const CONFIG = {
       "campo": "quantidade_por_embalagem",
       "rotulo": "Quantidade por embalagem",
       "tipo": "numero"
+    },
+    {
+      "campo": "marca_id",
+      "rotulo": "Marca",
+      "tipo": "select",
+      "de": {
+        "tabela": "arm_marcas",
+        "rotulo": "descricao"
+      }
     },
     {
       "campo": "ativo",
