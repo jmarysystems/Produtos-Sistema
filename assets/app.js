@@ -2,7 +2,7 @@
 import { sb, sair, sessao, meuPerfil, entrar, minhasPermissoes } from './api.js';
 import { SISTEMA } from './config.js';
 import * as ui from './ui.js';
-import * as tela from './views/tela.js';
+import * as tela from './views/tela.js?v=20261123a';
 
 const app = document.getElementById('app');
 let perfil = null;

@@ -87,7 +87,14 @@ export async function render(raiz, ctx) {
       titulo: editando ? 'Editar produto' : 'Novo produto',
       largura: '860px',
       corpo: `
-        <form id="form" class="grade grade-2">
+        <form id="form">
+          <div class="abas">
+            <button type="button" class="aba ativa" data-aba="basico">Dados básicos</button>
+            <button type="button" class="aba" data-aba="seguranca">QTD Segurança</button>
+          </div>
+
+          <section data-painel="basico">
+          <div class="grade grade-2">
           ${ui.campoTexto('SKU', 'sku', registro.sku, { obrigatorio: true })}
           ${ui.campoTexto('EAN', 'ean', registro.ean, { placeholder: 'se vazio, usa o SKU' })}
           ${ui.campoTexto('Descrição', 'descricao', registro.descricao, { obrigatorio: true })}
@@ -134,7 +141,23 @@ export async function render(raiz, ctx) {
             <div id="miniaturas" class="linha-acoes" style="margin-top:10px"></div>
           </div>
 
-          <div class="linha-acoes campo-largo">
+          </div>
+          </section>
+
+          <section data-painel="seguranca" hidden>
+            <p class="sub">Quantidades por posição na loja — usadas no cálculo do estoque de segurança.</p>
+            <div class="grade grade-2">
+              ${ui.campoTexto('Gôndola', 'gondola', registro.gondola ?? '', { tipo: 'number' })}
+              ${ui.campoTexto('Ponta de Gôndola', 'ponta_gondola', registro.ponta_gondola ?? '', { tipo: 'number' })}
+              ${ui.campoTexto('Ponto Extra', 'ponto_extra', registro.ponto_extra ?? '', { tipo: 'number' })}
+              ${ui.campoTexto('Geladeira', 'geladeira', registro.geladeira ?? '', { tipo: 'number' })}
+              ${ui.campoTexto('Paredão de Entrada', 'paredao_entrada', registro.paredao_entrada ?? '', { tipo: 'number' })}
+              ${ui.campoTexto('Depósito', 'deposito', registro.deposito ?? '', { tipo: 'number' })}
+            </div>
+            <p class="sub" id="total-seguranca"></p>
+          </section>
+
+          <div class="linha-acoes campo-largo" style="margin-top:14px">
             <button type="submit" class="botao-primario">${editando ? 'Salvar' : 'Cadastrar'}</button>
             <button type="button" id="cancelar">Cancelar</button>
           </div>
@@ -142,6 +165,32 @@ export async function render(raiz, ctx) {
     });
 
     corpo.querySelector('#cancelar').addEventListener('click', fechar);
+
+    // abas
+    for (const aba of corpo.querySelectorAll('.aba')) {
+      aba.addEventListener('click', () => {
+        for (const a of corpo.querySelectorAll('.aba')) a.classList.toggle('ativa', a === aba);
+        for (const p of corpo.querySelectorAll('[data-painel]')) {
+          p.hidden = p.dataset.painel !== aba.dataset.aba;
+        }
+      });
+    }
+
+    // total das posições
+    const camposPosicao = ['gondola', 'ponta_gondola', 'ponto_extra', 'geladeira',
+      'paredao_entrada', 'deposito'];
+    const totalEl = corpo.querySelector('#total-seguranca');
+    function atualizarTotal() {
+      const total = camposPosicao.reduce((s, campo) => {
+        const el = corpo.querySelector(`[name="${campo}"]`);
+        return s + (Number(el?.value) || 0);
+      }, 0);
+      if (totalEl) totalEl.textContent = `Total das posições: ${total}`;
+    }
+    for (const campo of camposPosicao) {
+      corpo.querySelector(`[name="${campo}"]`)?.addEventListener('input', atualizarTotal);
+    }
+    atualizarTotal();
 
     // cascata categoria -> subcategoria -> família
     const selCat = corpo.querySelector('[data-cat]');
@@ -238,6 +287,12 @@ export async function render(raiz, ctx) {
         quantidade_por_embalagem: d.quantidade_por_embalagem ? Number(d.quantidade_por_embalagem) : null,
         tabela_nutricional: d.tabela_nutricional || null,
         ativo: !!corpo.querySelector('[name="ativo"]').checked,
+        gondola: d.gondola ? Number(d.gondola) : null,
+        ponta_gondola: d.ponta_gondola ? Number(d.ponta_gondola) : null,
+        ponto_extra: d.ponto_extra ? Number(d.ponto_extra) : null,
+        geladeira: d.geladeira ? Number(d.geladeira) : null,
+        paredao_entrada: d.paredao_entrada ? Number(d.paredao_entrada) : null,
+        deposito: d.deposito ? Number(d.deposito) : null,
       };
 
       const botao = ev.target.querySelector('button[type="submit"]');

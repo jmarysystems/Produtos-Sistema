@@ -447,3 +447,11 @@ td.foto img{width:46px;height:46px;object-fit:cover;border-radius:6px;border:1px
 .zoom-prox{right:20px}
 .zoom-conta{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);
   color:#fff;font-size:14px;letter-spacing:.04em}
+
+/* ---------- abas ---------- */
+.abas{display:flex;gap:6px;margin:0 0 16px;border-bottom:1px solid #dde3ea}
+.aba{border:none;background:transparent;padding:10px 16px;cursor:pointer;font-size:14px;
+  color:#4a586b;border-bottom:2px solid transparent;margin-bottom:-1px}
+.aba:hover{color:#173a6b}
+.aba.ativa{color:#173a6b;font-weight:600;border-bottom-color:#2f6fbf}
+[hidden]{display:none !important}
