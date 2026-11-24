@@ -91,6 +91,7 @@ export async function render(raiz, ctx) {
           <div class="abas">
             <button type="button" class="aba ativa" data-aba="basico">Dados básicos</button>
             <button type="button" class="aba" data-aba="seguranca">QTD Segurança</button>
+            <button type="button" class="aba" data-aba="medidas">Medidas</button>
           </div>
 
           <section data-painel="basico">
@@ -157,6 +158,26 @@ export async function render(raiz, ctx) {
             <p class="sub" id="total-seguranca"></p>
           </section>
 
+          <section data-painel="medidas" hidden>
+            <p class="sub">Informe as medidas na unidade escolhida — o metro quadrado e o
+              metro cúbico são calculados automaticamente.</p>
+            <div class="grade grade-2">
+              <label class="campo"><span>Unidade de Medida</span>
+                <select name="unidade_medida" id="unidade-medida">
+                  ${['MILIMETRO', 'CENTIMETRO', 'METRO'].map((u) => `<option value="${u}" ${
+                    (registro.unidade_medida || 'METRO') === u ? 'selected' : ''}>${
+                    u.charAt(0) + u.slice(1).toLowerCase()}</option>`).join('')}
+                </select></label>
+              ${ui.campoTexto('Largura', 'largura', registro.largura ?? '', { tipo: 'number' })}
+              ${ui.campoTexto('Altura', 'altura', registro.altura ?? '', { tipo: 'number' })}
+              ${ui.campoTexto('Comprimento', 'comprimento', registro.comprimento ?? '', { tipo: 'number' })}
+              <label class="campo"><span>Metro Quadrado (m²)</span>
+                <input name="metro_quadrado" readonly value="${registro.metro_quadrado ?? ''}"></label>
+              <label class="campo"><span>Metro Cúbico (m³)</span>
+                <input name="metro_cubico" readonly value="${registro.metro_cubico ?? ''}"></label>
+            </div>
+          </section>
+
           <div class="linha-acoes campo-largo" style="margin-top:14px">
             <button type="submit" class="botao-primario">${editando ? 'Salvar' : 'Cadastrar'}</button>
             <button type="button" id="cancelar">Cancelar</button>
@@ -175,6 +196,32 @@ export async function render(raiz, ctx) {
         }
       });
     }
+
+    // medidas: converte para metro e calcula m² e m³
+    const FATOR = { MILIMETRO: 0.001, CENTIMETRO: 0.01, METRO: 1 };
+    function calcularMedidas() {
+      const unidade = corpo.querySelector('#unidade-medida')?.value || 'METRO';
+      const fator = FATOR[unidade] || 1;
+      const valor = (campo) => Number(corpo.querySelector(`[name="${campo}"]`)?.value) || 0;
+
+      const largura = valor('largura') * fator;
+      const altura = valor('altura') * fator;
+      const comprimento = valor('comprimento') * fator;
+
+      const m2 = largura && comprimento ? largura * comprimento : 0;
+      const m3 = largura && altura && comprimento ? largura * altura * comprimento : 0;
+
+      const campoM2 = corpo.querySelector('[name="metro_quadrado"]');
+      const campoM3 = corpo.querySelector('[name="metro_cubico"]');
+      if (campoM2) campoM2.value = m2 ? m2.toFixed(4) : '';
+      if (campoM3) campoM3.value = m3 ? m3.toFixed(4) : '';
+    }
+
+    for (const campo of ['largura', 'altura', 'comprimento', 'unidade-medida']) {
+      corpo.querySelector(`[name="${campo}"]`)?.addEventListener('input', calcularMedidas);
+      corpo.querySelector(`#${campo}`)?.addEventListener('change', calcularMedidas);
+    }
+    calcularMedidas();
 
     // total das posições
     const camposPosicao = ['gondola', 'ponta_gondola', 'ponto_extra', 'geladeira',
@@ -293,6 +340,12 @@ export async function render(raiz, ctx) {
         geladeira: d.geladeira ? Number(d.geladeira) : null,
         paredao_entrada: d.paredao_entrada ? Number(d.paredao_entrada) : null,
         deposito: d.deposito ? Number(d.deposito) : null,
+        unidade_medida: d.unidade_medida || 'METRO',
+        largura: d.largura ? Number(d.largura) : null,
+        altura: d.altura ? Number(d.altura) : null,
+        comprimento: d.comprimento ? Number(d.comprimento) : null,
+        metro_quadrado: d.metro_quadrado ? Number(d.metro_quadrado) : null,
+        metro_cubico: d.metro_cubico ? Number(d.metro_cubico) : null,
       };
 
       const botao = ev.target.querySelector('button[type="submit"]');
