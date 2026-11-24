@@ -127,8 +127,6 @@ export async function render(raiz, ctx) {
             </div>
             <small class="sub" id="cest-info"></small></label>
 
-          ${ui.campoTexto('Quantidade por embalagem', 'quantidade_por_embalagem',
-            registro.quantidade_por_embalagem ?? '', { tipo: 'number' })}
           <label class="campo"><span>Ativo</span>
             <input type="checkbox" name="ativo" ${registro.ativo === false ? '' : 'checked'}></label>
 
@@ -175,6 +173,18 @@ export async function render(raiz, ctx) {
                 <input name="metro_quadrado" readonly value="${registro.metro_quadrado ?? ''}"></label>
               <label class="campo"><span>Metro Cúbico (m³)</span>
                 <input name="metro_cubico" readonly value="${registro.metro_cubico ?? ''}"></label>
+
+              ${ui.campoTexto('Quantidade por embalagem', 'quantidade_por_embalagem',
+                registro.quantidade_por_embalagem ?? '', { tipo: 'number' })}
+              ${ui.campoTexto('Descrição reduzida', 'descricao_reduzida',
+                registro.descricao_reduzida ?? '')}
+              ${ui.campoTexto('Venda média diária', 'venda_media_diaria',
+                registro.venda_media_diaria ?? '', { tipo: 'number' })}
+              ${ui.campoTexto('Markup (%)', 'markup', registro.markup ?? '', { tipo: 'number' })}
+              ${ui.campoTexto('Margem objetiva (%)', 'margem_objetiva',
+                registro.margem_objetiva ?? '', { tipo: 'number' })}
+              ${ui.campoTexto('Margem realizada (%)', 'margem_realizada',
+                registro.margem_realizada ?? '', { tipo: 'number' })}
             </div>
           </section>
 
@@ -346,6 +356,11 @@ export async function render(raiz, ctx) {
         comprimento: d.comprimento ? Number(d.comprimento) : null,
         metro_quadrado: d.metro_quadrado ? Number(d.metro_quadrado) : null,
         metro_cubico: d.metro_cubico ? Number(d.metro_cubico) : null,
+        descricao_reduzida: d.descricao_reduzida || null,
+        venda_media_diaria: d.venda_media_diaria ? Number(d.venda_media_diaria) : null,
+        markup: d.markup ? Number(d.markup) : null,
+        margem_objetiva: d.margem_objetiva ? Number(d.margem_objetiva) : null,
+        margem_realizada: d.margem_realizada ? Number(d.margem_realizada) : null,
       };
 
       const botao = ev.target.querySelector('button[type="submit"]');
