@@ -37,7 +37,7 @@ export async function render(raiz, ctx) {
       <td>${esc(p.descricao)}</td>
       <td>${esc(p.unidade)}</td>
       <td>${esc(p.arm_categorias?.descricao || '—')}</td>
-      <td>${esc(p.arm_marcas?.descricao || '—')}</td>
+      <td>${esc(p.arm_marcas?.descricao || p.marca_fabricante || '—')}</td>
       <td>${p.ativo === false ? 'inativo' : 'ativo'}</td>
       <td class="acoes">
         ${podeEditar ? `<button type="button" class="botao-pequeno" data-editar="${esc(p.id)}">Editar</button>` : ''}
@@ -113,6 +113,8 @@ export async function render(raiz, ctx) {
           <label class="campo"><span>Marca</span>
             <select name="marca_id"><option value="">—</option>
               ${opcoes(marcas, registro.marca_id || '')}</select></label>
+          ${ui.campoTexto('Marca/Fabricante', 'marca_fabricante',
+            registro.marca_fabricante ?? '', { placeholder: 'ex.: Coca-Cola, Unilever…' })}
 
           <label class="campo"><span>NCM</span>
             <div class="linha-acoes" style="flex-wrap:nowrap">
@@ -339,6 +341,7 @@ export async function render(raiz, ctx) {
         subcategoria_id: d.subcategoria_id || null,
         familia_id: d.familia_id || null,
         marca_id: d.marca_id || null,
+        marca_fabricante: d.marca_fabricante || null,
         ncm_codigo: d.ncm_codigo || null,
         cest_codigo: d.cest_codigo || null,
         quantidade_por_embalagem: d.quantidade_por_embalagem ? Number(d.quantidade_por_embalagem) : null,
