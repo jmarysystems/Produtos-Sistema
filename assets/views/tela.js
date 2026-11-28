@@ -1,5 +1,5 @@
 // Produtos: cadastro completo com NCM, CEST, marca, tabela nutricional e imagens.
-import { sb, listar, criar, atualizar, excluir, traduzErro } from '../api.js';
+import { sb, listar, listarTudo, contar, criar, atualizar, excluir, traduzErro } from '../api.js';
 import * as ui from '../ui.js';
 
 const esc = ui.esc;
@@ -11,25 +11,28 @@ export async function render(raiz, ctx) {
   const podeEditar = ctx.pode('produtos', 'editar');
   const podeExcluir = ctx.pode('produtos', 'excluir');
 
-  const [produtos, categorias, subcategorias, familias, marcas] = await Promise.all([
-    listar('produtos', { select: '*, arm_categorias(descricao), arm_marcas(descricao)', ordem: 'sku' }),
+  const TAMANHO = 100;
+
+  const [categorias, subcategorias, familias, marcas, totalInicial] = await Promise.all([
     listar('arm_categorias', { ordem: 'descricao' }),
     listar('arm_subcategorias', { ordem: 'descricao' }),
-    listar('arm_familias', { ordem: 'descricao' }),
-    listar('arm_marcas', { ordem: 'descricao' }),
+    listarTudo('arm_familias', { ordem: 'descricao' }),
+    listarTudo('arm_marcas', { ordem: 'descricao' }),
+    contar('produtos'),
   ]);
   const listas = { categorias, subcategorias, familias, marcas };
 
-  const imagens = await listar('produto_imagens', { ordem: 'ordem' });
-  const porProduto = {};
-  for (const img of imagens) {
-    (porProduto[img.produto_id] = porProduto[img.produto_id] || []).push(img);
-  }
+  const porProduto = {};   // imagens carregadas sob demanda
+  let carregados = [];
+  let total = totalInicial;
+  let termo = '';
 
-  const linhas = produtos.map((p) => `
-    <tr data-busca="${esc(JSON.stringify(p).toLowerCase())}">
-      <td class="foto">${porProduto[p.id] && porProduto[p.id].length
-        ? `<img src="${esc(porProduto[p.id][0].url)}" alt="" class="mini"
+  function linhaDe(p) {
+    const fotos = porProduto[p.id] || [];
+    return `
+    <tr>
+      <td class="foto">${fotos.length
+        ? `<img src="${esc(fotos[0].url)}" alt="" class="mini"
              data-zoom="${esc(p.id)}" data-i="0">`
         : '—'}</td>
       <td class="mono">${esc(p.sku)}</td>
@@ -43,12 +46,13 @@ export async function render(raiz, ctx) {
         ${podeEditar ? `<button type="button" class="botao-pequeno" data-editar="${esc(p.id)}">Editar</button>` : ''}
         ${podeExcluir ? `<button type="button" class="botao-pequeno botao-perigo" data-excluir="${esc(p.id)}">Excluir</button>` : ''}
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }
 
   raiz.innerHTML = `
     <div class="cartao">
       <div class="cartao-topo">
-        <h2>${produtos.length} produto(s)</h2>
+        <h2><span id="total">${total}</span> produto(s)</h2>
         ${podeCriar ? '<button type="button" class="botao-primario" id="novo">Novo produto</button>' : ''}
       </div>
       <label class="campo" style="max-width:340px"><span>Filtrar</span>
@@ -56,18 +60,110 @@ export async function render(raiz, ctx) {
       <div class="tabela-rolagem"><table id="tabela">
         <thead><tr><th>Foto</th><th>SKU</th><th>EAN</th><th>Descrição</th><th>Un.</th>
           <th>Categoria</th><th>Marca</th><th>Ativo</th><th></th></tr></thead>
-        <tbody>${linhas || '<tr><td colspan="9">Nenhum produto cadastrado.</td></tr>'}</tbody>
+        <tbody><tr><td colspan="9" class="carregando">Carregando…</td></tr></tbody>
       </table></div>
+      <div class="linha-acoes" style="margin-top:12px;justify-content:center">
+        <button type="button" class="botao-pequeno" id="mais" hidden>Carregar mais</button>
+      </div>
     </div>`;
 
+  const corpoTabela = raiz.querySelector('#tabela tbody');
+  const rotuloTotal = raiz.querySelector('#total');
+  const botaoMais = raiz.querySelector('#mais');
   const filtro = raiz.querySelector('#filtro');
-  filtro.addEventListener('input', () => {
-    const t = filtro.value.toLowerCase();
-    for (const tr of raiz.querySelectorAll('#tabela tbody tr')) {
-      if (!tr.dataset.busca) continue;
-      tr.hidden = !!t && !tr.dataset.busca.includes(t);
+
+  async function carregarImagens(itens) {
+    const faltando = itens.map((p) => p.id).filter((id) => !(id in porProduto));
+    if (!faltando.length) return;
+
+    const imagens = await listar('produto_imagens', {
+      in: ['produto_id', faltando], ordem: 'ordem',
+    });
+    for (const p of itens) {
+      if (!(p.id in porProduto)) porProduto[p.id] = [];
     }
+    for (const img of imagens) {
+      (porProduto[img.produto_id] = porProduto[img.produto_id] || []).push(img);
+    }
+  }
+
+  async function desenhar() {
+    await carregarImagens(carregados);
+
+    corpoTabela.innerHTML = carregados.length
+      ? carregados.map(linhaDe).join('')
+      : `<tr><td colspan="9" class="vazio">${
+        termo ? 'Nenhum produto encontrado para esse filtro.' : 'Nenhum produto cadastrado.'
+      }</td></tr>`;
+
+    rotuloTotal.textContent = total;
+    botaoMais.hidden = carregados.length >= total;
+    botaoMais.textContent = `Carregar mais (${carregados.length} de ${total})`;
+
+    ligarAcoes();
+  }
+
+  async function buscar(resetar) {
+    if (resetar) carregados = [];
+
+    const opcoes = {
+      select: '*, arm_categorias(descricao), arm_marcas(descricao)',
+      ordem: 'sku',
+      limite: TAMANHO,
+      offset: carregados.length,
+    };
+    if (termo) opcoes.busca = termo;
+
+    try {
+      corpoTabela.innerHTML = '<tr><td colspan="9" class="carregando">Carregando…</td></tr>';
+      const itens = await listar('produtos', opcoes);
+      carregados = carregados.concat(itens);
+      total = await contar('produtos', termo ? { busca: termo } : {});
+      await desenhar();
+    } catch (erro) {
+      corpoTabela.innerHTML = `<tr><td colspan="9" class="vazio">${esc(erro.message)}</td></tr>`;
+    }
+  }
+
+  botaoMais.addEventListener('click', () => {
+    botaoMais.disabled = true;
+    buscar(false).finally(() => { botaoMais.disabled = false; });
   });
+
+  let temporizador = null;
+  filtro.addEventListener('input', () => {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => {
+      termo = filtro.value.trim();
+      buscar(true);
+    }, 350);
+  });
+
+  function ligarAcoes() {
+    for (const b of corpoTabela.querySelectorAll('[data-editar]')) {
+      b.addEventListener('click', () => {
+        const produto = carregados.find((p) => p.id === b.dataset.editar);
+        if (produto) abrirFormulario(produto);
+      });
+    }
+    for (const b of corpoTabela.querySelectorAll('[data-excluir]')) {
+      b.addEventListener('click', async () => {
+        if (!window.confirm('Excluir este produto?')) return;
+        try {
+          await excluir('produtos', b.dataset.excluir);
+          ui.toast('Produto excluído.');
+          ctx.recarregar();
+        } catch (erro) { ui.toast(erro.message, 'erro'); }
+      });
+    }
+    for (const img of corpoTabela.querySelectorAll('[data-zoom]')) {
+      img.addEventListener('click', () => {
+        const lista = porProduto[img.dataset.zoom] || [];
+        const i = Number(img.dataset.i) || 0;
+        if (lista[i]) window.open(lista[i].url, '_blank');
+      });
+    }
+  }
 
   // ------------------------------------------------------------------ form
   function opcoes(itens, valor) {
@@ -299,7 +395,7 @@ export async function render(raiz, ctx) {
     const miniaturas = corpo.querySelector('#miniaturas');
     const remover = [];
 
-    async function carregarImagens(produtoId) {
+    async function carregarImagensDoProduto(produtoId) {
       if (!produtoId) return;
       const { data } = await sb.from('produto_imagens')
         .select('*').eq('produto_id', produtoId).order('ordem');
@@ -327,7 +423,7 @@ export async function render(raiz, ctx) {
       }
     }
 
-    if (editando) carregarImagens(registro.id);
+    if (editando) carregarImagensDoProduto(registro.id);
 
     corpo.querySelector('#form').addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -409,9 +505,7 @@ export async function render(raiz, ctx) {
   }
 
   raiz.querySelector('#novo')?.addEventListener('click', () => abrirFormulario({}));
-  for (const b of raiz.querySelectorAll('[data-editar]')) {
-    b.addEventListener('click', () => abrirFormulario(produtos.find((p) => p.id === b.dataset.editar) || {}));
-  }
+  buscar(true);
   for (const b of raiz.querySelectorAll('[data-excluir]')) {
     b.addEventListener('click', async () => {
       if (!window.confirm('Excluir este produto?')) return;

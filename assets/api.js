@@ -57,14 +57,59 @@ export async function sessao() {
   return data.session || null;
 }
 
-export async function listar(tabela, opcoes = {}) {
-  let q = sb.from(tabela).select(opcoes.select || '*');
+function aplicarFiltros(q, opcoes) {
   for (const [campo, valor] of Object.entries(opcoes.eq || {})) q = q.eq(campo, valor);
+
+  if (opcoes.in) {
+    const [campo, valores] = opcoes.in;
+    if (Array.isArray(valores) && valores.length) q = q.in(campo, valores);
+  }
+
+  if (opcoes.busca) {
+    const termo = String(opcoes.busca).replace(/[%,()]/g, ' ').trim();
+    if (termo) {
+      q = q.or(`sku.ilike.%${termo}%,ean.ilike.%${termo}%,descricao.ilike.%${termo}%`);
+    }
+  }
+  return q;
+}
+
+export async function listar(tabela, opcoes = {}) {
+  let q = aplicarFiltros(sb.from(tabela).select(opcoes.select || '*'), opcoes);
   if (opcoes.ordem) q = q.order(opcoes.ordem, { ascending: opcoes.asc !== false });
-  if (opcoes.limite) q = q.limit(opcoes.limite);
+
+  if (opcoes.offset) {
+    const fim = opcoes.offset + (opcoes.limite || 100) - 1;
+    q = q.range(opcoes.offset, fim);
+  } else if (opcoes.limite) {
+    q = q.limit(opcoes.limite);
+  }
+
   const { data, error } = await q;
   if (error) throw new Error(traduzErro(error));
   return data || [];
+}
+
+/** Percorre todas as páginas (o PostgREST devolve no máximo 1000 linhas). */
+export async function listarTudo(tabela, opcoes = {}) {
+  const TAMANHO = 1000;
+  let offset = 0;
+  let todos = [];
+  for (;;) {
+    const lote = await listar(tabela, { ...opcoes, limite: TAMANHO, offset });
+    todos = todos.concat(lote);
+    if (lote.length < TAMANHO) break;
+    offset += TAMANHO;
+  }
+  return todos;
+}
+
+/** Conta os registros (respeitando os mesmos filtros). */
+export async function contar(tabela, opcoes = {}) {
+  const q = aplicarFiltros(sb.from(tabela).select('*', { count: 'exact', head: true }), opcoes);
+  const { count, error } = await q;
+  if (error) throw new Error(traduzErro(error));
+  return count || 0;
 }
 
 export async function criar(tabela, dados) {
