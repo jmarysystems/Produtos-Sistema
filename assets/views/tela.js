@@ -26,6 +26,7 @@ export async function render(raiz, ctx) {
   let carregados = [];
   let total = totalInicial;
   let termo = '';
+  let situacao = 'ativo';   // ativo | inativo | todos
 
   function linhaDe(p) {
     const fotos = porProduto[p.id] || [];
@@ -41,7 +42,9 @@ export async function render(raiz, ctx) {
       <td>${esc(p.unidade)}</td>
       <td>${esc(p.arm_categorias?.descricao || '—')}</td>
       <td>${esc(p.arm_marcas?.descricao || p.marca_fabricante || '—')}</td>
-      <td>${p.ativo === false ? 'inativo' : 'ativo'}</td>
+      <td>${p.ativo === false
+        ? ui.badge('inativo', 'vermelho')
+        : ui.badge('ativo', 'verde')}</td>
       <td class="acoes">
         ${podeEditar ? `<button type="button" class="botao-pequeno" data-editar="${esc(p.id)}">Editar</button>` : ''}
         ${podeExcluir ? `<button type="button" class="botao-pequeno botao-perigo" data-excluir="${esc(p.id)}">Excluir</button>` : ''}
@@ -55,8 +58,16 @@ export async function render(raiz, ctx) {
         <h2><span id="total">${total}</span> produto(s)</h2>
         ${podeCriar ? '<button type="button" class="botao-primario" id="novo">Novo produto</button>' : ''}
       </div>
-      <label class="campo" style="max-width:340px"><span>Filtrar</span>
-        <input type="search" id="filtro" placeholder="SKU, EAN ou descrição"></label>
+      <div class="grade grade-2" style="max-width:620px">
+        <label class="campo"><span>Filtrar</span>
+          <input type="search" id="filtro" placeholder="SKU, EAN ou descrição"></label>
+        <label class="campo"><span>Situação</span>
+          <select id="situacao">
+            <option value="ativo" selected>Ativos</option>
+            <option value="inativo">Inativos</option>
+            <option value="todos">Todos</option>
+          </select></label>
+      </div>
       <div class="tabela-rolagem"><table id="tabela">
         <thead><tr><th>Foto</th><th>SKU</th><th>EAN</th><th>Descrição</th><th>Un.</th>
           <th>Categoria</th><th>Marca</th><th>Ativo</th><th></th></tr></thead>
@@ -71,6 +82,7 @@ export async function render(raiz, ctx) {
   const rotuloTotal = raiz.querySelector('#total');
   const botaoMais = raiz.querySelector('#mais');
   const filtro = raiz.querySelector('#filtro');
+  const selSituacao = raiz.querySelector('#situacao');
 
   async function carregarImagens(itens) {
     const faltando = itens.map((p) => p.id).filter((id) => !(id in porProduto));
@@ -113,12 +125,16 @@ export async function render(raiz, ctx) {
       offset: carregados.length,
     };
     if (termo) opcoes.busca = termo;
+    if (situacao !== 'todos') opcoes.eq = { ativo: situacao === 'ativo' };
 
     try {
       corpoTabela.innerHTML = '<tr><td colspan="9" class="carregando">Carregando…</td></tr>';
       const itens = await listar('produtos', opcoes);
       carregados = carregados.concat(itens);
-      total = await contar('produtos', termo ? { busca: termo } : {});
+      const filtrosContagem = {};
+      if (termo) filtrosContagem.busca = termo;
+      if (situacao !== 'todos') filtrosContagem.eq = { ativo: situacao === 'ativo' };
+      total = await contar('produtos', filtrosContagem);
       await desenhar();
     } catch (erro) {
       corpoTabela.innerHTML = `<tr><td colspan="9" class="vazio">${esc(erro.message)}</td></tr>`;
@@ -128,6 +144,11 @@ export async function render(raiz, ctx) {
   botaoMais.addEventListener('click', () => {
     botaoMais.disabled = true;
     buscar(false).finally(() => { botaoMais.disabled = false; });
+  });
+
+  selSituacao.addEventListener('change', () => {
+    situacao = selSituacao.value;
+    buscar(true);
   });
 
   let temporizador = null;
